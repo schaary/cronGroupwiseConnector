@@ -2,7 +2,7 @@
 source 'https://rubygems.org'
 
 gem 'awesome_print'
-gem 'chronic'
+gem 'colored'
 gem 'dotenv'
 gem 'mail'
 gem 'pry'
