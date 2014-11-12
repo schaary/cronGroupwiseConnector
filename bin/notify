@@ -1,31 +1,151 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 
-require 'chronic'
+$:.unshift File.expand_path('../../lib',__FILE__)
+
+require 'awesome_print'
+require 'colored'
 require 'dotenv'
+require 'mail'
 require 'ruby-plsql'
+require 'pry'
 require 'thor'
+require 'time'
+
+require 'account'
+require 'dispatcher'
 
 class Notify < Thor
+  method_option :since,
+                desc: 'timestamp, since new mail addresses should be fetched'
+  method_option :nolog,
+                type: :boolean,
+                default: false,
+                desc: 'write no log about this run'
   desc 'send_add_sets','fetch the cursor with new mail addresss from idm'
   def send_add_sets
-    fetch
+    last_run_timestamp = parse_timestamp(since: options[:since])
+
+    @first_lines = []
+    @last_lines = []
+    fetch since: last_run_timestamp
+    transform
+
+    mail_body = ""
+
+    if 0 < @first_lines.length
+      @first_lines.map do |line|
+        mail_body << line << "\n"
+      end
+
+      @last_lines.map do |line|
+        mail_body << line << "\n"
+      end
+    else
+      mail_body = "Es liegen keine neuen Mail-Logins vor!"
+    end
+
+    mail_options = {
+      address: 'localhost',
+      port:    25,
+      domain:  'uni-halle.de',
+      enable_starttls_auto: false
+    }
+
+    Mail.defaults do 
+      delivery_method :smtp, mail_options
+    end
+
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'postmaster@uni-halle.de'
+      subject 'Subject: neue Mail-Logins'
+      body    mail_body 
+    end
+    mail.deliver
+
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'michael.schaarschmidt@itz.uni-halle.de'
+      subject 'Subject: neue Mail-Logins'
+      body    mail_body 
+    end
+    mail.deliver
+
+    write_log
   end
 
 private
-  def fetch
+  def fetch since: nil
     connect
-    puts plsql.accounts.count
+
+    records = nil
+    plsql.mail_pkg.fetchAddSets(since) { |c| records = c.fetch_all }
+
+    @accounts = records.map do |record|
+      cast_to_account(record)
+    end
   end
 
-  def lastRun
+  def parse_timestamp since: nil
+    return last_run if since.nil?
+
+    unless since.match(/\A[0-9]{2}\.[0-9]{2}\.[0-9]{4}\s[0-9]{2}:[0-9]{2}\z/)
+      abort error "Das angegebene Datumsformat kann nicht geparsed werden. " + 
+                  "Versuche: '01.03.1972 07:24'"
+    end
+
+    begin
+      DateTime.strptime(since,'%d.%m.%Y %H:%M').to_time
+    rescue => e
+    end
   end
 
+  def last_run
+    connect
+    plsql.ma_pkg.lastRun(2,1)
+  end
+
+  def error msg
+    error_prefix = "[" + "error".red + "] "
+    error_prefix + msg
+  end
+
+  def write_log
+    unless options[:nolog]
+      return_value = plsql.ma_pkg.writeLog(2, 1, 0)
+    end
+  end
+
+  def cast_to_account(record)
+    account = Account.new
+    account.id = record[0].to_i
+    account.uid = record[1].strip
+    account.lastname = record[2].strip
+    account.firstname = record[3]
+    account.account_type = record[5]
+    account.mail = record[6].strip
+    account.uid_number = record[7]
+    account.gid_number = record[8]
+    account.password = record[9].strip
+
+    account
+  end
+
+  def transform
+    dispatcher = Dispatcher.new
+    @accounts.map do |account|
+      @first_lines << dispatcher.dispatch_first_line(account)
+    end
+    @accounts.map do |account|
+      @last_lines << dispatcher.dispatch_last_line(account)
+    end
+  end
 
   def connect
     Dotenv.load
 
-    plsql.connection = OCI8.new \
+    plsql.connection ||= OCI8.new \
       ENV['IDM_USERNAME'],
       ENV['IDM_PASSWORD'],
       ENV['IDM_SID']
