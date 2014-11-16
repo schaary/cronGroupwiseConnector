@@ -29,7 +29,7 @@ class Notify < Thor
 
     @first_lines = []
     @last_lines = []
-    fetch since: last_run_timestamp
+    fetch_add_sets since: last_run_timestamp
     transform
 
     mail_body = ""
@@ -46,47 +46,112 @@ class Notify < Thor
       mail_body = "Es liegen keine neuen Mail-Logins vor!"
     end
 
-    ap mail_body
+    mail_options = {
+      address: 'localhost',
+      port:    25,
+      domain:  'uni-halle.de',
+      enable_starttls_auto: false
+    }
 
-    # mail_options = {
-    #   address: 'localhost',
-    #   port:    25,
-    #   domain:  'uni-halle.de',
-    #   enable_starttls_auto: false
-    # }
+    Mail.defaults do 
+      delivery_method :test, mail_options
+    end
 
-    # Mail.defaults do 
-    #   delivery_method :test, mail_options
-    # end
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'postmaster@uni-halle.de'
+      subject 'Subject: neue Mail-Logins'
+      body    mail_body 
+    end
+    mail.deliver
 
-    # mail = Mail.new do
-    #   from    'michael.schaarschmidt@itz.uni-halle.de'
-    #   to      'postmaster@uni-halle.de'
-    #   subject 'Subject: neue Mail-Logins'
-    #   body    mail_body 
-    # end
-    # mail.deliver
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'michael.schaarschmidt@itz.uni-halle.de'
+      subject 'Subject: neue Mail-Logins'
+      body    mail_body 
+    end
+    mail.deliver
 
-    # mail = Mail.new do
-    #   from    'michael.schaarschmidt@itz.uni-halle.de'
-    #   to      'michael.schaarschmidt@itz.uni-halle.de'
-    #   subject 'Subject: neue Mail-Logins'
-    #   body    mail_body 
-    # end
-    # mail.deliver
-
-#    write_log
+    write_log
   end
 
+
+  method_option :since,
+                desc: 'timestamp, since new mail addresses should be fetched'
+  method_option :nolog,
+                type: :boolean,
+                default: false,
+                desc: 'write no log about this run'
+  desc 'send_delete_sets','fetch the cursor with deleted mail addresss from idm'
+  def send_delete_sets
+    @service = :delete
+    last_run_timestamp = parse_timestamp(since: options[:since])
+
+    @delete_lines = []
+    fetch_delete_sets since: last_run_timestamp
+    transform
+
+    mail_body = ""
+
+    ap @delete_lines
+    if 0 < @delete_lines.length
+      @delete_lines.map do |line|
+        mail_body << line << "\n"
+      end
+    else
+      mail_body = "Es liegen keine zu loeschenden Mail-Adressen vor!"
+    end
+
+    mail_options = {
+      address: 'localhost',
+      port:    25,
+      domain:  'uni-halle.de',
+      enable_starttls_auto: false
+    }
+
+    Mail.defaults do 
+      delivery_method :smtp, mail_options
+    end
+
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'postmaster@uni-halle.de'
+      subject 'Subject: zu loeschende Mail-Adressen'
+      body    mail_body 
+    end
+    mail.deliver
+
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'michael.schaarschmidt@itz.uni-halle.de'
+      subject 'Subject: zu loeschende Mail-Adressen'
+      body    mail_body 
+    end
+    mail.deliver
+
+    write_log
+  end
 private
-  def fetch since: nil
+  def fetch_add_sets since: nil
     connect
 
     records = nil
     plsql.mail_pkg.fetchAddSets(since) { |c| records = c.fetch_all }
 
     @accounts = records.map do |record|
-      cast_to_account(record)
+      cast_to_add_account(record)
+    end
+  end
+
+  def fetch_delete_sets since: nil
+    connect
+
+    records = nil
+    plsql.mail_pkg.fetchDeleteSets(since) { |c| records = c.fetch_all }
+
+    @accounts = records.map do |record|
+      cast_to_delete_account(record)
     end
   end
 
@@ -132,7 +197,7 @@ private
     end
   end
 
-  def cast_to_account(record)
+  def cast_to_add_account(record)
     account = Account.new
     account.id = record[0].to_i
     account.uid = record[1].strip
@@ -147,13 +212,29 @@ private
     account
   end
 
+  def cast_to_delete_account(record)
+    account = Account.new
+    account.uid = record[0].strip
+    account.mail = record[1].strip
+
+    account
+  end
+
   def transform
     dispatcher = Dispatcher.new
-    @accounts.map do |account|
-      @first_lines << dispatcher.dispatch_first_line(account)
-    end
-    @accounts.map do |account|
-      @last_lines << dispatcher.dispatch_last_line(account)
+    if :add == @service
+      @accounts.map do |account|
+        @first_lines << dispatcher.dispatch_first_line(account: account)
+      end
+      @accounts.map do |account|
+        @last_lines << dispatcher.dispatch_last_line(account: account)
+      end
+    elsif :delete == @service
+      @accounts.map do |account|
+        @delete_lines << dispatcher.dispatch_delete_line(account: account)
+      end
+    else
+      abort error "last_run kann nur für add oder delete abgefragt werden"
     end
   end
 
