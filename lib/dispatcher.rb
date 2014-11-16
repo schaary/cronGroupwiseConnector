@@ -10,12 +10,16 @@ class Dispatcher
     fetch_umlaute
   end
 
-  def dispatch_first_line account
-    model_first_line_from(account)
+  def dispatch_first_line account: account
+    model_first_line_from account
   end
 
-  def dispatch_last_line account
-    model_last_line_from(account)
+  def dispatch_last_line account: account
+    model_last_line_from account
+  end
+
+  def dispatch_delete_line account: account
+    model_delete_from account
   end
 
 
@@ -38,6 +42,11 @@ private
     "#{name}:" +
     "#{account.mail}:"
   end
+
+  def model_delete_from account
+    "#DELETE:#{account.uid}:#{account.mail}"
+  end
+
 
   def adjust name
     return nil if name.nil?
