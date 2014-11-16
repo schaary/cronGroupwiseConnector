@@ -24,6 +24,7 @@ class Notify < Thor
                 desc: 'write no log about this run'
   desc 'send_add_sets','fetch the cursor with new mail addresss from idm'
   def send_add_sets
+    @service = :add
     last_run_timestamp = parse_timestamp(since: options[:since])
 
     @first_lines = []
@@ -45,34 +46,36 @@ class Notify < Thor
       mail_body = "Es liegen keine neuen Mail-Logins vor!"
     end
 
-    mail_options = {
-      address: 'localhost',
-      port:    25,
-      domain:  'uni-halle.de',
-      enable_starttls_auto: false
-    }
+    ap mail_body
 
-    Mail.defaults do 
-      delivery_method :smtp, mail_options
-    end
+    # mail_options = {
+    #   address: 'localhost',
+    #   port:    25,
+    #   domain:  'uni-halle.de',
+    #   enable_starttls_auto: false
+    # }
 
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'postmaster@uni-halle.de'
-      subject 'Subject: neue Mail-Logins'
-      body    mail_body 
-    end
-    mail.deliver
+    # Mail.defaults do 
+    #   delivery_method :test, mail_options
+    # end
 
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'michael.schaarschmidt@itz.uni-halle.de'
-      subject 'Subject: neue Mail-Logins'
-      body    mail_body 
-    end
-    mail.deliver
+    # mail = Mail.new do
+    #   from    'michael.schaarschmidt@itz.uni-halle.de'
+    #   to      'postmaster@uni-halle.de'
+    #   subject 'Subject: neue Mail-Logins'
+    #   body    mail_body 
+    # end
+    # mail.deliver
 
-    write_log
+    # mail = Mail.new do
+    #   from    'michael.schaarschmidt@itz.uni-halle.de'
+    #   to      'michael.schaarschmidt@itz.uni-halle.de'
+    #   subject 'Subject: neue Mail-Logins'
+    #   body    mail_body 
+    # end
+    # mail.deliver
+
+#    write_log
   end
 
 private
@@ -103,7 +106,13 @@ private
 
   def last_run
     connect
-    plsql.ma_pkg.lastRun(2,1)
+    if :add == @service then
+      plsql.ma_pkg.lastRun(2,1)
+    elsif :delete == @service then
+      plsql.ma_pkg.lastRun(2,3)
+    else
+      abort error "last_run kann nur für add oder delete abgefragt werden"
+    end
   end
 
   def error msg
@@ -113,7 +122,13 @@ private
 
   def write_log
     unless options[:nolog]
-      return_value = plsql.ma_pkg.writeLog(2, 1, 0)
+      if :add == @service
+        return_value = plsql.ma_pkg.writeLog(2, 1, 0)
+      elsif :delete == @service
+        return_value = plsql.ma_pkg.writeLog(2, 3, 0)
+      else
+        abort error "last_run kann nur für add oder delete abgefragt werden"
+      end
     end
   end
 
