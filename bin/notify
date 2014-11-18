@@ -54,7 +54,7 @@ class Notify < Thor
     }
 
     Mail.defaults do 
-      delivery_method :test, mail_options
+      delivery_method :smtp, mail_options
     end
 
     mail = Mail.new do
