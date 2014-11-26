@@ -15,6 +15,23 @@ require 'time'
 require 'account'
 require 'dispatcher'
 
+# Das Script arbeitet in folgenden Schritten:
+#
+# 1. zuerst wird der Zeitpunkt des letzten Laufes des Scriptes bestimmt, um den
+#    Zeitraum zu umreissen, aus dem alle Neueinträge gesammelt werden.
+#    Dieser Zeitraum wird entweder über eine Variable --since an das Script
+#    beim Aufruf übergeben oder es wird versucht, diesen Zeitpunkt aus der
+#    Datenbank zu bestimmen. Jeder Scriptdurchlauf wird in der Tabelle
+#    ma_log_tbl protokolliert. Dort wird nachgeschaut.
+# 2. Anschliessend werden alle Einträge seit dem ermittelten Zeitstempel aus
+#    der Datenbank geholt. 
+# 3. Die Einträge aus der Datenbank werden in der Funktion 'transform' für die
+#    Email aufbereitet und in den globalen Arrays @first_lines und @last_lines
+#    abgelegt. 
+# 4. Der Body der Mail wird aus den globalen Arrays @first_lines und
+#    @last_lines bzw. - für die Löschmail - @delete_lines zusammen gestellt
+# 5. Mail wird versendet.
+
 class Notify < Thor
   method_option :since,
                 desc: 'timestamp, since new mail addresses should be fetched'
