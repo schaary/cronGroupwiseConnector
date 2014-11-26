@@ -46,6 +46,7 @@ class Notify < Thor
 
     @first_lines = []
     @last_lines = []
+    @ldif_add_lines = []
     fetch_add_sets since: last_run_timestamp
     transform
 
@@ -89,8 +90,36 @@ class Notify < Thor
       body    mail_body 
     end
     mail.deliver
-
     write_log
+
+    mail_body = ""
+
+    if 0 < @ldif_add_lines.length
+      @ldif_add_lines.map do |line|
+        mail_body << line << "\n"
+      end
+    else
+      mail_body = "Es liegen keine neuen Mail-Logins vor!"
+    end
+
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'postmaster@uni-halle.de'
+      subject 'Subject: neue Mail-Logins als LDIF'
+      body    mail_body 
+    end
+    mail.deliver
+
+    Mail.defaults do 
+      delivery_method :smtp, mail_options
+    end
+    mail = Mail.new do
+      from    'michael.schaarschmidt@itz.uni-halle.de'
+      to      'michael.schaarschmidt@itz.uni-halle.de'
+      subject 'Subject: neue Mail-Logins als LDIF'
+      body    mail_body 
+    end
+    mail.deliver
   end
 
 
@@ -226,7 +255,7 @@ private
     account.gid_number = record[8]
     account.password = record[9].strip
 
-    account
+    account.freeze
   end
 
   def cast_to_delete_account(record)
@@ -234,7 +263,7 @@ private
     account.uid = record[0].strip
     account.mail = record[1].strip
 
-    account
+    account.freeze
   end
 
   def transform
@@ -245,6 +274,9 @@ private
       end
       @accounts.map do |account|
         @last_lines << dispatcher.dispatch_last_line(account: account)
+      end
+      @accounts.map do |account|
+        @ldif_add_lines << dispatcher.dispatch_ldif_add_line(account: account)
       end
     elsif :delete == @service
       @accounts.map do |account|

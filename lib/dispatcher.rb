@@ -3,6 +3,9 @@
 require 'awesome_print'
 require 'ruby-plsql'
 
+require 'digest/sha1'
+require 'base64'
+
 class Dispatcher
 
   def initialize
@@ -20,6 +23,10 @@ class Dispatcher
 
   def dispatch_delete_line account: account
     model_delete_from account
+  end
+
+  def dispatch_ldif_add_line account: account
+    model_ldif_add_line account
   end
 
 
@@ -45,6 +52,24 @@ private
 
   def model_delete_from account
     "#DELETE:#{account.uid}:#{account.mail}"
+  end
+
+  def model_ldif_add_line account
+    line = "dn: uid=#{account.uid},ou=mail,o=mlu,c=de\n"
+    line += "sn: #{account.lastname}\n"
+
+    if account.firstname.nil?
+      line += "cn: #{account.lastname}\n"
+    else
+      line += "givenName: #{account.firstname}\n"
+      line += "cn: #{account.firstname} #{account.lastname}\n"
+    end
+    line += "mail: #{account.mail}\n"
+    line += "userPassword: {SHA1}#{Base64.encode64(Digest::SHA1.hexdigest(account.password)).strip}\n"
+    line += "objectClass: top\n"
+    line += "objectClass: person\n"
+    line += "objectClass: inetOrgPerson\n\n"
+    line
   end
 
 
