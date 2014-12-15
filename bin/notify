@@ -5,7 +5,7 @@ $:.unshift File.expand_path('../../lib',__FILE__)
 
 require 'awesome_print'
 require 'colored'
-require 'dotenv'
+require 'dotenv'; Dotenv.load
 require 'mail'
 require 'ruby-plsql'
 require 'pry'
@@ -52,7 +52,7 @@ class Notify < Thor
 
     classic_add_mail
     modern_add_mail
-    #write_log
+    write_log
   end
 
   method_option :since,
@@ -73,23 +73,31 @@ class Notify < Thor
 
     classic_delete_mail
     modern_delete_mail
-    #write_log
+    write_log
   end
 
 private
 
   def send_mail mail_subject: nil, mail_body: nil
-    initialize_mail
-    ["michael.schaarschmidt@itz.uni-halle.de", 
-     "postmaster@uni-halle.de"].map do |receiver|
+    mail_options = {
+      address: 'localhost',
+      port:    25,
+      domain:  'uni-halle.de',
+      enable_starttls_auto: false
+    }
+
+    Mail.defaults do 
+      delivery_method ENV["MAIL_DELIVERY_METHOD"].to_sym, mail_options
+    end
+
+    [ENV["MY_MAIL_ADDRESS"], ENV["POSTMASTER_MAIL_ADDRESS"]].map do |receiver|
       mail = Mail.new do
-        from    'michael.schaarschmidt@itz.uni-halle.de'
+        from    ENV["MY_MAIL_ADDRESS"]
         to      receiver
         subject mail_subject
         body    mail_body 
       end
-      #mail.deliver
-      puts mail
+      mail.deliver
     end
   end
 
@@ -159,20 +167,6 @@ private
     send_mail \
       mail_subject: "zu loeschende Mail-Adressen als LDIF", 
       mail_body: mail_body
-  end
-
-
-  def initialize_mail
-    mail_options = {
-      address: 'localhost',
-      port:    25,
-      domain:  'uni-halle.de',
-      enable_starttls_auto: false
-    }
-
-    Mail.defaults do 
-      delivery_method ENV["MAIL_DELIVERY_METHOD"].to_sym, mail_options
-    end
   end
 
   def fetch_add_sets since: nil
@@ -287,8 +281,6 @@ private
   end
 
   def connect
-    Dotenv.load
-
     plsql.connection ||= OCI8.new \
       ENV['IDM_USERNAME'],
       ENV['IDM_PASSWORD'],
