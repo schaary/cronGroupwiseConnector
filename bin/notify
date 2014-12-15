@@ -50,6 +50,50 @@ class Notify < Thor
     fetch_add_sets since: last_run_timestamp
     transform
 
+    classic_add_mail
+    modern_add_mail
+    #write_log
+  end
+
+  method_option :since,
+                desc: 'timestamp, since new mail addresses should be fetched'
+  method_option :nolog,
+                type: :boolean,
+                default: false,
+                desc: 'write no log about this run'
+  desc 'send_delete_sets','fetch the cursor with deleted mail addresss from idm'
+  def send_delete_sets
+    @service = :delete
+    last_run_timestamp = parse_timestamp(since: options[:since])
+
+    @delete_lines = []
+    @ldif_delete_lines = []
+    fetch_delete_sets since: last_run_timestamp
+    transform
+
+    classic_delete_mail
+    modern_delete_mail
+    #write_log
+  end
+
+private
+
+  def send_mail mail_subject: nil, mail_body: nil
+    initialize_mail
+    ["michael.schaarschmidt@itz.uni-halle.de", 
+     "postmaster@uni-halle.de"].map do |receiver|
+      mail = Mail.new do
+        from    'michael.schaarschmidt@itz.uni-halle.de'
+        to      receiver
+        subject mail_subject
+        body    mail_body 
+      end
+      #mail.deliver
+      puts mail
+    end
+  end
+
+  def classic_add_mail
     mail_body = ""
 
     if 0 < @first_lines.length
@@ -64,34 +108,12 @@ class Notify < Thor
       mail_body = "Es liegen keine neuen Mail-Logins vor!"
     end
 
-    mail_options = {
-      address: 'localhost',
-      port:    25,
-      domain:  'uni-halle.de',
-      enable_starttls_auto: false
-    }
+    send_mail \
+      mail_subject: "neue Mail-Logins", 
+      mail_body: mail_body
+  end
 
-    Mail.defaults do 
-      delivery_method :smtp, mail_options
-    end
-
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'postmaster@uni-halle.de'
-      subject 'Subject: neue Mail-Logins'
-      body    mail_body 
-    end
-    mail.deliver
-
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'michael.schaarschmidt@itz.uni-halle.de'
-      subject 'Subject: neue Mail-Logins'
-      body    mail_body 
-    end
-    mail.deliver
-    write_log
-
+  def modern_add_mail
     mail_body = ""
 
     if 0 < @ldif_add_lines.length
@@ -102,45 +124,14 @@ class Notify < Thor
       mail_body = "Es liegen keine neuen Mail-Logins vor!"
     end
 
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'postmaster@uni-halle.de'
-      subject 'Subject: neue Mail-Logins als LDIF'
-      body    mail_body 
-    end
-    mail.deliver
-
-    Mail.defaults do 
-      delivery_method :smtp, mail_options
-    end
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'michael.schaarschmidt@itz.uni-halle.de'
-      subject 'Subject: neue Mail-Logins als LDIF'
-      body    mail_body 
-    end
-    mail.deliver
+    send_mail \
+      mail_subject: 'neue Mail-Logins als LDIF', 
+      mail_body: mail_body
   end
 
-
-  method_option :since,
-                desc: 'timestamp, since new mail addresses should be fetched'
-  method_option :nolog,
-                type: :boolean,
-                default: false,
-                desc: 'write no log about this run'
-  desc 'send_delete_sets','fetch the cursor with deleted mail addresss from idm'
-  def send_delete_sets
-    @service = :delete
-    last_run_timestamp = parse_timestamp(since: options[:since])
-
-    @delete_lines = []
-    fetch_delete_sets since: last_run_timestamp
-    transform
-
+  def classic_delete_mail
     mail_body = ""
 
-    ap @delete_lines
     if 0 < @delete_lines.length
       @delete_lines.map do |line|
         mail_body << line << "\n"
@@ -149,6 +140,29 @@ class Notify < Thor
       mail_body = "Es liegen keine zu loeschenden Mail-Adressen vor!"
     end
 
+    send_mail \
+      mail_subject: "zu loeschende Mail-Adressen", 
+      mail_body: mail_body
+  end
+
+  def modern_delete_mail
+    mail_body = ""
+
+    if 0 < @delete_lines.length
+      @ldif_delete_lines.map do |line|
+        mail_body << line << "\n"
+      end
+    else
+      mail_body = "Es liegen keine zu loeschenden Mail-Adressen vor!"
+    end
+
+    send_mail \
+      mail_subject: "zu loeschende Mail-Adressen als LDIF", 
+      mail_body: mail_body
+  end
+
+
+  def initialize_mail
     mail_options = {
       address: 'localhost',
       port:    25,
@@ -157,28 +171,10 @@ class Notify < Thor
     }
 
     Mail.defaults do 
-      delivery_method :smtp, mail_options
+      delivery_method ENV["MAIL_DELIVERY_METHOD"].to_sym, mail_options
     end
-
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'postmaster@uni-halle.de'
-      subject 'Subject: zu loeschende Mail-Adressen'
-      body    mail_body 
-    end
-    mail.deliver
-
-    mail = Mail.new do
-      from    'michael.schaarschmidt@itz.uni-halle.de'
-      to      'michael.schaarschmidt@itz.uni-halle.de'
-      subject 'Subject: zu loeschende Mail-Adressen'
-      body    mail_body 
-    end
-    mail.deliver
-
-    write_log
   end
-private
+
   def fetch_add_sets since: nil
     connect
 
@@ -281,6 +277,9 @@ private
     elsif :delete == @service
       @accounts.map do |account|
         @delete_lines << dispatcher.dispatch_delete_line(account: account)
+      end
+      @accounts.map do |account|
+        @ldif_delete_lines << dispatcher.dispatch_ldif_delete_line(account: account)
       end
     else
       abort error "last_run kann nur für add oder delete abgefragt werden"

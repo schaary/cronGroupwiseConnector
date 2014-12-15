@@ -26,9 +26,12 @@ class Dispatcher
   end
 
   def dispatch_ldif_add_line account: account
-    model_ldif_add_line account
+    model_ldif_add_line_from account
   end
 
+  def dispatch_ldif_delete_line account: account
+    model_ldif_delete_line_from account
+  end
 
   def adjust name
     return nil if name.nil?
@@ -62,7 +65,7 @@ private
     "#DELETE:#{account.uid}:#{account.mail}"
   end
 
-  def model_ldif_add_line account
+  def model_ldif_add_line_from account
     line = "dn: uid=#{account.uid},ou=mail,o=mlu,c=de\n"
     line += "sn: #{account.lastname}\n"
 
@@ -80,14 +83,8 @@ private
     line
   end
 
-
-  def adjust name
-    return nil if name.nil?
-
-    @umlaute.map do |set|
-      name.gsub! set[:umlaut], set[:zeichenkette]
-    end
-    name
+  def model_ldif_delete_line_from account
+    "uid=#{account.uid},ou=mail,o=mlu,c=de"
   end
 
   def fetch_umlaute
