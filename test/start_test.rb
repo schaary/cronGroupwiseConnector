@@ -29,9 +29,9 @@ class DispatcherTest < Minitest::Test
       "cn: #{@account.firstname} #{@account.lastname}\n" +
       "mail: #{@account.mail}\n" +
       "userPassword: {SHA1}#{Base64.encode64(Digest::SHA1.hexdigest(@account.password)).strip}\n" +
-      "objectclass: top\n" +
-      "objectclass: person\n" +
-      "objectclass: inetOrgPerson\n\n"
+      "objectClass: top\n" +
+      "objectClass: person\n" +
+      "objectClass: inetOrgPerson\n\n"
 
     dispatcher = Dispatcher.new
     assert_equal dispatcher.dispatch_ldif_add_line(account: @account), ldif_add_line
