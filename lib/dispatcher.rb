@@ -30,6 +30,14 @@ class Dispatcher
   end
 
 
+  def adjust name
+    return nil if name.nil?
+
+    @umlaute.map do |set|
+      name.gsub! set[:umlaut], set[:zeichenkette]
+    end
+    name
+  end
 private
   def model_first_line_from account
     name = ("#{adjust(account.firstname)} #{adjust(account.lastname)}").strip

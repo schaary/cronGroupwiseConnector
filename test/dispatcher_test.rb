@@ -20,6 +20,17 @@ class DispatcherTest < Minitest::Test
     @account.password = "tESSt-42"
   end
 
+  def test_adjust
+    testcases = [ {example: "rüpel", solution: "ruepel"},
+                   {example: "änderung", solution: "aenderung"},
+                   {example: "höchstens", solution: "hoechstens"} ]
+
+    dispatcher = Dispatcher.new
+    testcases.map do |testcase|
+      assert_equal dispatcher.adjust(testcase[:example]), testcase[:solution]
+    end
+  end
+
   def test_dispatch_ldif_add_line
 
     ldif_add_line = \
