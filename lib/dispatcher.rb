@@ -5,6 +5,7 @@ require 'ruby-plsql'
 
 require 'digest/sha1'
 require 'base64'
+require 'net/ldap'
 
 class Dispatcher
 
@@ -76,7 +77,8 @@ private
       line += "cn: #{account.firstname} #{account.lastname}\n"
     end
     line += "mail: #{account.mail}\n"
-    line += "userPassword: {SHA1}#{Base64.encode64(Digest::SHA1.hexdigest(account.password)).strip}\n"
+    #line += "userPassword: {SHA1}#{Base64.encode64(Digest::SHA1.hexdigest(account.password)).strip}\n"
+    line += "userPassword: #{Net::LDAP::Password.generate(:sha, account.password)}\n"
     line += "objectClass: top\n"
     line += "objectClass: person\n"
     line += "objectClass: inetOrgPerson\n\n"
