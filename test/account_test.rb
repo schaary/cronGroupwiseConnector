@@ -6,7 +6,7 @@ require "account"
 class AccountTest < Minitest::Test
   include FactoryGirl::Syntax::Methods
 
-  context 'arbitrary account' do
+  context 'a person account' do
     setup do
       @account = Account.new \
         [1,
@@ -60,6 +60,29 @@ class AccountTest < Minitest::Test
 
     should 'accept only String for password' do
       assert_kind_of String, @account.password
+    end
+
+    should 'build a displayname from first- and lastname' do
+      assert_equal @account.displayname, "#{@account.firstname} #{@account.lastname}"
+    end
+  end
+
+  context 'a functional account' do
+    setup do
+      @account = Account.new \
+        [1,
+         'elvis',
+         'Presley',
+         nil,
+         'f',
+         'elvis@example.com',
+         123,
+         123,
+         'geheim']
+    end
+
+    should 'build the displayname only from the lastname' do
+      assert_equal @account.displayname, "#{@account.lastname}"
     end
   end
 end

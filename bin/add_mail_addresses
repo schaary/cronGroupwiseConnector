@@ -12,8 +12,8 @@ require 'pry'
 require 'thor'
 require 'time'
 
-require 'account'
-require 'dispatcher'
+require 'idm'
+require 'groupwise'
 
 class AddMailAddresses < Thor
   method_option :since,
@@ -22,157 +22,30 @@ class AddMailAddresses < Thor
                 type: :boolean,
                 default: false,
                 desc: 'write no log about this run'
-  desc 'send_add_sets','fetch the cursor with new mail addresss from idm'
-  def send_add_sets
+  desc 'push','fetch the cursor with new mail addresss from idm'
+  def push
     @service = :push
+
+    @idm = Idm.new
     last_run_timestamp = parse_timestamp(since: options[:since])
 
-    fetch_add_sets since: last_run_timestamp
-    transform
+    @accounts = @idm.fetch_add_sets since: last_run_timestamp
 
-    classic_add_mail
-    modern_add_mail
-    write_log
-  end
+    groupwise = Groupwise.new
+    counter = 0
+    @accounts.map do |account|
+      groupwise.add(account: account)
+      counter += 1
+      puts "#{counter}: Account #{account.uid} (#{account.mail}) geschrieben"
+    end
 
-  method_option :since,
-                desc: 'timestamp, since new mail addresses should be fetched'
-  method_option :nolog,
-                type: :boolean,
-                default: false,
-                desc: 'write no log about this run'
-  desc 'send_delete_sets','fetch the cursor with deleted mail addresss from idm'
-  def send_delete_sets
-    @service = :delete
-    last_run_timestamp = parse_timestamp(since: options[:since])
-
-    @delete_lines = []
-    @ldif_delete_lines = []
-    fetch_delete_sets since: last_run_timestamp
-    transform
-
-    classic_delete_mail
-    modern_delete_mail
-    write_log
+    @idm.write_log(service: @service) unless options[:nolog]
   end
 
 private
 
-  def send_mail mail_subject: nil, mail_body: nil
-    mail_options = {
-      address: 'localhost',
-      port:    25,
-      domain:  'uni-halle.de',
-      enable_starttls_auto: false
-    }
-
-    Mail.defaults do 
-      delivery_method ENV["MAIL_DELIVERY_METHOD"].to_sym, mail_options
-    end
-
-    [ENV["MY_MAIL_ADDRESS"], ENV["POSTMASTER_MAIL_ADDRESS"]].map do |receiver|
-      mail = Mail.new do
-        from    ENV["MY_MAIL_ADDRESS"]
-        to      receiver
-        subject mail_subject
-        body    mail_body 
-      end
-      mail.deliver
-    end
-  end
-
-  def classic_add_mail
-    mail_body = ""
-
-    if 0 < @first_lines.length
-      @first_lines.map do |line|
-        mail_body << line << "\n"
-      end
-
-      @last_lines.map do |line|
-        mail_body << line << "\n"
-      end
-    else
-      mail_body = "Es liegen keine neuen Mail-Logins vor!"
-    end
-
-    send_mail \
-      mail_subject: "neue Mail-Logins", 
-      mail_body: mail_body
-  end
-
-  def modern_add_mail
-    mail_body = ""
-
-    if 0 < @ldif_add_lines.length
-      @ldif_add_lines.map do |line|
-        mail_body << line << "\n"
-      end
-    else
-      mail_body = "Es liegen keine neuen Mail-Logins vor!"
-    end
-
-    send_mail \
-      mail_subject: 'neue Mail-Logins als LDIF', 
-      mail_body: mail_body
-  end
-
-  def classic_delete_mail
-    mail_body = ""
-
-    if 0 < @delete_lines.length
-      @delete_lines.map do |line|
-        mail_body << line << "\n"
-      end
-    else
-      mail_body = "Es liegen keine zu loeschenden Mail-Adressen vor!"
-    end
-
-    send_mail \
-      mail_subject: "zu loeschende Mail-Adressen", 
-      mail_body: mail_body
-  end
-
-  def modern_delete_mail
-    mail_body = ""
-
-    if 0 < @delete_lines.length
-      @ldif_delete_lines.map do |line|
-        mail_body << line << "\n"
-      end
-    else
-      mail_body = "Es liegen keine zu loeschenden Mail-Adressen vor!"
-    end
-
-    send_mail \
-      mail_subject: "zu loeschende Mail-Adressen als LDIF", 
-      mail_body: mail_body
-  end
-
-  def fetch_add_sets since: nil
-    connect
-
-    records = nil
-    plsql.mail_pkg.fetchAddSets(since) { |c| records = c.fetch_all }
-
-    @accounts = records.map do |record|
-      cast_to_add_account(record)
-    end
-  end
-
-  def fetch_delete_sets since: nil
-    connect
-
-    records = nil
-    plsql.mail_pkg.fetchDeleteSets(since) { |c| records = c.fetch_all }
-
-    @accounts = records.map do |record|
-      cast_to_delete_account(record)
-    end
-  end
-
   def parse_timestamp since: nil
-    return last_run if since.nil?
+    return @idm.last_run(service: @service) if since.nil?
 
     unless since.match(/\A[0-9]{2}\.[0-9]{2}\.[0-9]{4}\s[0-9]{2}:[0-9]{2}\z/)
       abort error "Das angegebene Datumsformat kann nicht geparsed werden. " + 
@@ -185,81 +58,10 @@ private
     end
   end
 
-  def last_run
-    connect
-    if :add == @service then
-      plsql.ma_pkg.lastRun(2,4)
-    elsif :delete == @service then
-      plsql.ma_pkg.lastRun(2,3)
-    else
-      abort error "last_run kann nur für push oder delete abgefragt werden"
-    end
-  end
-
   def error msg
     error_prefix = "[" + "error".red + "] "
     error_prefix + msg
   end
-
-  def write_log
-    unless options[:nolog]
-      if :add == @service
-        return_value = plsql.ma_pkg.writeLog(2, 1, 0)
-      elsif :delete == @service
-        return_value = plsql.ma_pkg.writeLog(2, 3, 0)
-      else
-        abort error "last_run kann nur für add oder delete abgefragt werden"
-      end
-    end
-  end
-
-  def cast_to_add_account(record)
-    account = Account.new
-    account.id = record[0].to_i
-    account.uid = record[1].strip
-    account.lastname = record[2].strip
-    account.firstname = record[3]
-    account.account_type = record[5]
-    account.mail = record[6].strip
-    account.uid_number = record[7]
-    account.gid_number = record[8]
-    account.password = record[9].strip
-
-    account.freeze
-  end
-
-  def cast_to_delete_account(record)
-    account = Account.new
-    account.uid = record[0].strip
-    account.mail = record[1].strip
-
-    account.freeze
-  end
-
-  def transform
-    dispatcher = Dispatcher.new
-    if :add == @service
-      @accounts.map do |account|
-        @first_lines << dispatcher.dispatch_first_line(account: account)
-      end
-      @accounts.map do |account|
-        @last_lines << dispatcher.dispatch_last_line(account: account)
-      end
-      @accounts.map do |account|
-        @ldif_add_lines << dispatcher.dispatch_ldif_add_line(account: account)
-      end
-    elsif :delete == @service
-      @accounts.map do |account|
-        @delete_lines << dispatcher.dispatch_delete_line(account: account)
-      end
-      @accounts.map do |account|
-        @ldif_delete_lines << dispatcher.dispatch_ldif_delete_line(account: account)
-      end
-    else
-      abort error "last_run kann nur für add oder delete abgefragt werden"
-    end
-  end
-
 end
 
-Notify.start
+AddMailAddresses.start

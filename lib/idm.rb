@@ -1,6 +1,8 @@
 # encoding: utf-8
 
 require "ruby-plsql"
+require "pry"
+require_relative "./account"
 
 class Idm
 
@@ -12,12 +14,22 @@ class Idm
     records = nil
     plsql.mail_pkg.fetchAddSets(since) { |c| records = c.fetch_all }
 
-    @accounts = records.map do |record|
-      cast_to_add_account(record)
+    records.reduce([]) do |accounts, record|
+      accounts << Account.new(record)
     end
   end
 
+  def last_run service: nil
+    if :push == service then
+      plsql.ma_pkg.lastRun(2,4)
+    end
+  end
 
+  def write_log service: nil
+    if :push == service
+      return_value = plsql.ma_pkg.writeLog(2, 4, 0)
+    end
+  end
 
 private
   def connect

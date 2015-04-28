@@ -13,6 +13,13 @@ class Groupwise
     connect
   end
 
+  def add account: nil
+    if uid_not_exist?(uid: account.uid)
+      dn = "uid=#{account.uid},#{ENV['GWLDAP_BASEDN']}"
+      @ldap.add dn: dn, attributes: account.to_ldif
+    end
+  end
+
   def exist_mail? mail: mail
     filter = Net::LDAP::Filter.eq 'mail', mail
     basedn = ENV['GWLDAP_BASEDN']
@@ -37,6 +44,10 @@ class Groupwise
     end
 
     counter > 0 ? true : false
+  end
+
+  def uid_not_exist? uid: uid
+    !exist_uid?(uid: uid)
   end
 
 private
