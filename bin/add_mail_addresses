@@ -26,6 +26,7 @@ class AddMailAddresses < Thor
   def push
     @service = :push
 
+    puts "Beginn: #{Time.now.localtime.strftime('%d.%m.%Y %H:%M Uhr')}"
     @idm = Idm.new
     last_run_timestamp = parse_timestamp(since: options[:since])
 
@@ -40,6 +41,7 @@ class AddMailAddresses < Thor
     end
 
     @idm.write_log(service: @service) unless options[:nolog]
+    puts "Ende: #{Time.now.localtime.strftime('%d.%m.%Y %H:%M Uhr')}"
   end
 
 private

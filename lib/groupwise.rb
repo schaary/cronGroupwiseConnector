@@ -17,6 +17,7 @@ class Groupwise
     if uid_not_exist?(uid: account.uid)
       dn = "uid=#{account.uid},#{ENV['GWLDAP_BASEDN']}"
       @ldap.add dn: dn, attributes: account.to_ldif
+      puts "Account #{account.uid} in den Groupwise-LDAP eingetragen."
     end
   end
 

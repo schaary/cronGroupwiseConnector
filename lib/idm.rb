@@ -14,6 +14,12 @@ class Idm
     records = nil
     plsql.mail_pkg.fetchAddSets(since) { |c| records = c.fetch_all }
 
+    if 0 < records.count
+      puts "IDM einlesen: ... #{records.count} Accounts eingelesen."
+    else
+      puts "IDM einlesen: ... es wurden keine neuen Accounts gefunden."
+    end
+
     records.reduce([]) do |accounts, record|
       accounts << Account.new(record)
     end
