@@ -2,11 +2,10 @@
 
 # Diese Klasse ist der Konnektor hin zum Groupwise.
 #
-# exist_address? -> bool
+# exist_mail? -> bool
 # exist_uid? -> bool
 
 require "net/ldap"
-require "pry"
 
 class Groupwise
 
@@ -16,7 +15,7 @@ class Groupwise
 
   def exist_mail? mail: mail
     filter = Net::LDAP::Filter.eq 'mail', mail
-    basedn = "ou=mail,o=mlu,c=de"
+    basedn = ENV['GWLDAP_BASEDN']
     attributes = ['dn']
 
     counter = 0
@@ -29,7 +28,7 @@ class Groupwise
 
   def exist_uid? uid: uid
     filter = Net::LDAP::Filter.eq 'uid', uid
-    basedn = "ou=mail,o=mlu,c=de"
+    basedn = ENV['GWLDAP_BASEDN']
     attributes = ['dn']
 
     counter = 0
