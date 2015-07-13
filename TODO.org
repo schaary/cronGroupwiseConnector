@@ -1,0 +1,14 @@
+#+title: ms_update_gw_accounts
+#+author: Michael Schaarschmidt
+#+email: michael.schaarschmidt@itz.uni-halle.de
+
+Ziel ist, die Accounts im Groupwise-LDAP zu aktualisieren, wenn die Accounts im
+Nutzerprojekt aktualisiert wurden. Dazu wird in diesem ersten Schritt nicht wie
+üblich die Prüfsumme errechnet und Mengen darüber gebildet, sondern es wird eine
+explizite Tabelle (umt_change_gw_queue_tbl) mit den erfolgten Änderungen mit
+geführt.
+Diese Queue wird bei jedem Aufruf des Scriptes vollständig abgearbeitet.
+
+
+* TODO lege Datei bin/update_gw_account an
+* TODO function groupwise.update account: nil
