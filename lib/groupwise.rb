@@ -6,6 +6,7 @@
 # exist_uid? -> bool
 
 require "net/ldap"
+require "awesome_print"
 
 class Groupwise
 
@@ -13,15 +14,37 @@ class Groupwise
     connect
   end
 
-  def add account: nil
+  def add(account:)
     if uid_not_exist?(uid: account.uid)
       dn = "uid=#{account.uid},#{ENV['GWLDAP_BASEDN']}"
+      puts "hier to ldif"
       @ldap.add dn: dn, attributes: account.to_ldif
       puts "Account #{account.uid} in den Groupwise-LDAP eingetragen."
     end
   end
 
-  def exist_mail? mail: mail
+  def update(account:)
+    if uid_exist?(uid: account.uid)
+      dn = "uid=#{account.uid},#{ENV['GWLDAP_BASEDN']}"
+      operations = [
+        [:replace, :sn, account.lastname],
+        [:replace, :cn, account.displayname],
+        [:replace, :mail, account.mail],
+        [:replace, :carlicense, account.checksum]
+      ]
+
+      if "f" != account.account_type
+        operations << [:replace, :givenname, account.firstname]
+      end
+
+      @ldap.modify dn: dn, operations: operations
+
+      ap operations
+      puts "Account #{account.uid} in den Groupwise-LDAP eingetragen."
+    end
+  end
+
+  def exist_mail?(mail:)
     filter = Net::LDAP::Filter.eq 'mail', mail
     basedn = ENV['GWLDAP_BASEDN']
     attributes = ['dn']
@@ -34,7 +57,7 @@ class Groupwise
     counter > 0 ? true : false
   end
 
-  def exist_uid? uid: uid
+  def uid_exist?(uid:)
     filter = Net::LDAP::Filter.eq 'uid', uid
     basedn = ENV['GWLDAP_BASEDN']
     attributes = ['dn']
@@ -47,8 +70,8 @@ class Groupwise
     counter > 0 ? true : false
   end
 
-  def uid_not_exist? uid: uid
-    !exist_uid?(uid: uid)
+  def uid_not_exist?(uid:)
+    !uid_exist?(uid: uid)
   end
 
 private
