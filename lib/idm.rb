@@ -25,6 +25,26 @@ class Idm
     end
   end
 
+  def fetch_update_sets
+    records = nil
+    plsql.mail_pkg.fetchUpdateSets { |c| records = c.fetch_all }
+
+    if 0 < records.count
+      puts "IDM einlesen: ... #{records.count} Accounts eingelesen."
+    else
+      puts "IDM einlesen: ... es wurden keine neuen Accounts gefunden."
+    end
+
+    records.reduce([]) do |accounts, record|
+      accounts << Account.new(record)
+    end
+
+  end
+
+  def set_gw_change_task_close(uid_number:)
+    plsql.mail_pkg.setGwChangeTaskClose(uid_number)
+  end
+
   def last_run service: nil
     if :push == service then
       plsql.ma_pkg.lastRun(2,4)
